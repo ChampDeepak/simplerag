@@ -34,7 +34,7 @@ export function chunkText(text: string, chunkSize: number = 500, overlap: number
       content: currentChunk.trim(),
       metadata: {
         source: 'uploaded-document',
-        chunkIndex,
+        
       },
     });
   }
