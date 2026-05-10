@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateSingleEmbedding } from '@/lib/embeddings';
-import { vectorStore } from '@/lib/vectorStore';
+import { similaritySearch } from '@/lib/vectorStore';
 import { generateAnswer } from '@/lib/groq';
 
 export async function POST(request: NextRequest) {
@@ -13,9 +13,9 @@ export async function POST(request: NextRequest) {
 
     const queryEmbedding = await generateSingleEmbedding(question);
     
-    const searchResults = await vectorStore.similaritySearch(queryEmbedding, 4);
+    const searchResults = await similaritySearch(queryEmbedding, 4);
     
-    const contexts = searchResults.documents?.[0] || [];
+    const contexts = searchResults.map((r) => r.text);
     
     if (contexts.length === 0) {
       return NextResponse.json({ 

@@ -21,8 +21,8 @@ Document Upload → Text Extraction → Chunking → Embedding → Vector Storag
 1. **Ingestion**: User uploads PDF or TXT file
 2. **Text Extraction**: Parse document text using LiteParse (with built-in OCR)
 3. **Chunking**: Split text into semantically coherent chunks
-4. **Embedding**: Generate vector embeddings using HuggingFace transformers
-5. **Storage**: Store embeddings in in-memory vector database
+4. **Embedding**: Generate vector embeddings using OpenAI text-embedding-3-small via Vercel AI Gateway
+5. **Storage**: Store embeddings in Upstash Vector (hosted vector database)
 6. **Retrieval**: Find relevant chunks using similarity search
 7. **Generation**: Generate answer using Vercel AI SDK with retrieved context
 
@@ -33,8 +33,8 @@ Document Upload → Text Extraction → Chunking → Embedding → Vector Storag
 | **Framework** | Next.js 16 with TypeScript |
 | **UI** | React 19, Tailwind CSS 4 |
 | **PDF Parsing** | @llamaindex/liteparse (with Tesseract OCR) |
-| **Embeddings** | @xenova/transformers (Xenova/all-MiniLM-L6-v2) |
-| **Vector Store** | In-memory (custom implementation) |
+| **Embeddings** | OpenAI text-embedding-3-small via Vercel AI Gateway |
+| **Vector Store** | Upstash Vector (hosted) |
 | **LLM Provider** | Vercel AI Gateway |
 | **LLM SDK** | Vercel AI SDK |
 | **LLM Model** | openai/gpt-4.1-mini |
@@ -92,11 +92,15 @@ npm run dev
 Create a `.env.local` file:
 
 ```env
-VERCEL_GATEWAY_URL=https://your-gateway-id.vercel.ai
-VERCEL_AI_GATEWAY_API_KEY=your_api_key_here
+# Vercel AI Gateway (for embeddings and LLM)
+AI_GATEWAY_API_KEY=your_api_key_here
+
+# Upstash Vector (hosted vector database)
+UPSTASH_VECTOR_REST_URL=your_upstash_vector_url
+UPSTASH_VECTOR_REST_TOKEN=your_upstash_vector_token
 ```
 
-Set up a Vercel AI Gateway at [vercel.com/dashboard](https://vercel.com/dashboard) to proxy LLM requests.
+Set up a Vercel AI Gateway at [vercel.com/dashboard](https://vercel.com/dashboard) to proxy OpenAI requests.
 
 ## Usage
 
@@ -155,8 +159,8 @@ rag-app/
 │   │   └── ChatSection.tsx       # Chat interface
 │   ├── lib/
 │   │   ├── chunking.ts            # Document parsing & chunking
-│   │   ├── embeddings.ts          # Embedding generation
-│   │   ├── vectorStore.ts         # In-memory vector store
+│   │   ├── embeddings.ts          # OpenAI embedding via Vercel AI Gateway
+│   │   ├── vectorStore.ts         # Upstash Vector (hosted)
 │   │   └── groq.ts                # LLM generation (Vercel AI SDK)
 │   └── types/
 │       └── index.ts               # TypeScript interfaces

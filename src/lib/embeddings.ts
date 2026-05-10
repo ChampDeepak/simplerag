@@ -1,21 +1,18 @@
-import { pipeline, FeatureExtractionPipeline } from '@xenova/transformers';
+import OpenAI from 'openai';
 
-let embeddingPipeline: FeatureExtractionPipeline | null = null;
+const apiKey = process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN;
 
-export async function getEmbeddingPipeline(): Promise<FeatureExtractionPipeline> {
-  if (!embeddingPipeline) {
-    embeddingPipeline = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-  }
-  return embeddingPipeline;
-}
+const openai = new OpenAI({
+  apiKey,
+  baseURL: 'https://ai-gateway.vercel.sh/v1',
+});
 
 export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
-  const pipe = await getEmbeddingPipeline();
-  const embeddings = await pipe(texts, {
-    pooling: 'mean',
-    normalize: true,
+  const response = await openai.embeddings.create({
+    model: 'openai/text-embedding-3-small',
+    input: texts,
   });
-  return embeddings.tolist() as number[][];
+  return response.data.map((item) => item.embedding);
 }
 
 export async function generateSingleEmbedding(text: string): Promise<number[]> {

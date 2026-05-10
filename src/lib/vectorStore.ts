@@ -1,58 +1,43 @@
+import { Index } from '@upstash/vector';
 import { Document } from '@/types';
 
-interface StoredDoc {
-  content: string;
+const index = new Index({
+  url: process.env.UPSTASH_VECTOR_REST_URL!,
+  token: process.env.UPSTASH_VECTOR_REST_TOKEN!,
+});
+
+interface Chunk {
+  text: string;
   embedding: number[];
   metadata: Record<string, unknown>;
 }
 
-class VectorStore {
-  private documents: StoredDoc[] = [];
+export async function storeEmbeddings(chunks: Chunk[]): Promise<void> {
+  const vectors = chunks.map((chunk, i) => ({
+    id: `chunk-${i}-${Date.now()}`,
+    vector: chunk.embedding,
+    metadata: { text: chunk.text, source: chunk.metadata.source },
+  }));
 
-  private cosineSimilarity(a: number[], b: number[]): number {
-    let dotProduct = 0;
-    let normA = 0;
-    let normB = 0;
-    for (let i = 0; i < a.length; i++) {
-      dotProduct += a[i] * b[i];
-      normA += a[i] * a[i];
-      normB += b[i] * b[i];
-    }
-    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-  }
-
-  async initialize(): Promise<void> {}
-
-  async addDocuments(documents: Document[], embeddings: number[][]): Promise<void> {
-    this.documents = documents.map((doc, i) => ({
-      content: doc.content,
-      embedding: embeddings[i],
-      metadata: doc.metadata,
-    }));
-  }
-
-  async similaritySearch(queryEmbedding: number[], k: number = 4) {
-    const scored = this.documents.map((doc, i) => ({
-      content: doc.content,
-      score: this.cosineSimilarity(queryEmbedding, doc.embedding),
-      metadata: doc.metadata,
-      id: `chunk-${i}`,
-    }));
-
-    scored.sort((a, b) => b.score - a.score);
-    const topK = scored.slice(0, k);
-
-    return {
-      documents: [topK.map((d) => d.content)],
-      distances: [topK.map((d) => 1 - d.score)],
-      metadatas: [topK.map((d) => d.metadata)],
-      ids: [topK.map((d) => d.id)],
-    };
-  }
-
-  async clear(): Promise<void> {
-    this.documents = [];
-  }
+  await index.upsert(vectors);
 }
 
-export const vectorStore = new VectorStore();
+export async function similaritySearch(
+  queryEmbedding: number[],
+  topK: number = 4
+): Promise<{ text: string; score: number }[]> {
+  const results = await index.query({
+    vector: queryEmbedding,
+    topK,
+    includeMetadata: true,
+  });
+
+  return results.map((r) => ({
+    text: r.metadata?.text as string,
+    score: r.score,
+  }));
+}
+
+export async function clearIndex(): Promise<void> {
+  await index.reset();
+}
