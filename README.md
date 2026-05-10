@@ -37,7 +37,7 @@ Document Upload → Text Extraction → Chunking → Embedding → Vector Storag
 | **Vector Store** | Upstash Vector (hosted) |
 | **LLM Provider** | Vercel AI Gateway |
 | **LLM SDK** | Vercel AI SDK |
-| **LLM Model** | openai/gpt-4.1-mini |
+| **LLM Model** | openai/gpt-5.3-chat |
 
 ## Chunking Strategy
 
