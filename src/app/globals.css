@@ -1,0 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #0f0f0f;
+  --border: #e5e5e5;
+  --panel: #f9f9f9;
+  --bubble-user: #f4f4f4;
+  --bubble-bot: #ffffff;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: 'Inter', system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #212121;
+    --foreground: #ececec;
+    --border: #424242;
+    --panel: #2f2f2f;
+    --bubble-user: #2f2f2f;
+    --bubble-bot: #212121;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer utilities {
+  .btn-primary {
+    @apply bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 transition-colors rounded-lg px-4 py-2 font-medium;
+  }
+  
+  .btn-secondary {
+    @apply bg-transparent border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--panel)] transition-colors rounded-lg px-4 py-2 font-medium;
+  }
+
+  .panel {
+    @apply bg-[var(--panel)] border border-[var(--border)] rounded-2xl;
+  }
+}
+
