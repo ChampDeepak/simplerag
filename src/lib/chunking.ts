@@ -1,6 +1,6 @@
 import { Document } from '@/types';
-import fs from 'node:fs';
-import path from 'node:path';
+import { extractText } from 'unpdf';
+
 
 export function chunkText(text: string, chunkSize: number = 500, overlap: number = 50): Document[] {
   const chunks: Document[] = [];
@@ -44,21 +44,9 @@ export function chunkText(text: string, chunkSize: number = 500, overlap: number
 
 export async function extractTextFromFile(file: File): Promise<string> {
   if (file.type === 'application/pdf') {
-    const tempPath = path.join('/tmp', `${Date.now()}-${file.name}`);
     const buffer = await file.arrayBuffer();
-    fs.writeFileSync(tempPath, Buffer.from(buffer));
-    
-    try {
-      const { LiteParse } = await import('@llamaindex/liteparse');
-      const parser = new LiteParse();
-      const result = await parser.parse(tempPath);
-      const text = result.text;
-      return text;
-    } finally {
-      try {
-        fs.unlinkSync(tempPath);
-      } catch {}
-    }
+    const { text } = await extractText(new Uint8Array(buffer), { mergePages: true });
+    return text;
   }
   
   return await file.text();

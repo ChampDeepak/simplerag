@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractTextFromFile, chunkText } from '@/lib/chunking';
 import { generateEmbeddings } from '@/lib/embeddings';
-import { storeEmbeddings, clearIndex } from '@/lib/vectorStore';
+import { storeEmbeddings } from '@/lib/vectorStore';
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,7 +29,6 @@ export async function POST(request: NextRequest) {
       metadata: { source: file.name },
     }));
     
-    await clearIndex();
     await storeEmbeddings(chunkData);
 
     return NextResponse.json({ 

@@ -37,7 +37,3 @@ export async function similaritySearch(
     score: r.score,
   }));
 }
-
-export async function clearIndex(): Promise<void> {
-  await index.reset();
-}

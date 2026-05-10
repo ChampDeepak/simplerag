@@ -19,7 +19,7 @@ Document Upload → Text Extraction → Chunking → Embedding → Vector Storag
 ```
 
 1. **Ingestion**: User uploads PDF or TXT file
-2. **Text Extraction**: Parse document text using LiteParse (with built-in OCR)
+2. **Text Extraction**: Parse document text using unpdf
 3. **Chunking**: Split text into semantically coherent chunks
 4. **Embedding**: Generate vector embeddings using OpenAI text-embedding-3-small via Vercel AI Gateway
 5. **Storage**: Store embeddings in Upstash Vector (hosted vector database)
@@ -32,7 +32,7 @@ Document Upload → Text Extraction → Chunking → Embedding → Vector Storag
 |-------|-------------|
 | **Framework** | Next.js 16 with TypeScript |
 | **UI** | React 19, Tailwind CSS 4 |
-| **PDF Parsing** | @llamaindex/liteparse (with Tesseract OCR) |
+| **PDF Parsing** | unpdf |
 | **Embeddings** | OpenAI text-embedding-3-small via Vercel AI Gateway |
 | **Vector Store** | Upstash Vector (hosted) |
 | **LLM Provider** | Vercel AI Gateway |
