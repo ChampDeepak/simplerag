@@ -15,8 +15,7 @@ export function chunkText(text: string, chunkSize: number = 500, overlap: number
         id: `chunk-${chunkIndex}`,
         content: currentChunk.trim(),
         metadata: {
-          source: 'uploaded-document',
-          chunkIndex,
+          source: 'uploaded-document'
         },
       });
       chunkIndex++;
