@@ -1,21 +1,35 @@
 # Document Q&A Assistant (Google NotebookLM Clone)
 
-A RAG-powered application that allows users to upload documents (PDF or text) and have conversations with them. The system processes documents, stores embeddings in a vector database, and generates answers grounded in the document content.
+A **Corrective RAG (CRAG)** powered application that lets users upload documents (PDF or text) and have grounded conversations with them. Instead of trusting top-k retrieval blindly, the system has an LLM judge inspect every retrieved chunk, filter out noise, refine partial hits, and reformulate the query when retrieval fails — producing answers that are both more accurate and more honest about uncertainty.
 
 ## Features
 
 - Upload PDF or plain text documents
 - Automatic chunking of documents for efficient retrieval
 - Semantic search using embeddings
-- Q&A interaction powered by Groq LLM
+- **Corrective RAG pipeline** — LLM-as-judge evaluates retrieval quality and self-corrects
+- Per-answer correction stats surfaced to the UI (HIGH/AMBIGUOUS/LOW counts, correction type, reformulated query)
+- Q&A interaction powered by an LLM via Vercel AI Gateway
 - Answers grounded in document content (no hallucinations)
 
 ## Architecture
 
-### RAG Pipeline
+### Corrective RAG Pipeline
 
 ```
-Document Upload → Text Extraction → Chunking → Embedding → Vector Storage → Retrieval → Generation
+Upload → Extract → Chunk → Embed → Vector Store
+                                       │
+                                       ▼
+Question ─► Embed ─► Retrieve Top-K ─► LLM Judge ─► Triage
+                                                     │
+                       ┌─────────────────────────────┼─────────────────────────────┐
+                       ▼                             ▼                             ▼
+                    HIGH                       AMBIGUOUS                          LOW
+              (use as-is)              (knowledge refinement)         (reformulate + re-retrieve)
+                       │                             │                             │
+                       └─────────────────────────────┼─────────────────────────────┘
+                                                     ▼
+                                              Final Context → Generation
 ```
 
 1. **Ingestion**: User uploads PDF or TXT file
@@ -23,8 +37,54 @@ Document Upload → Text Extraction → Chunking → Embedding → Vector Storag
 3. **Chunking**: Split text into semantically coherent chunks
 4. **Embedding**: Generate vector embeddings using OpenAI text-embedding-3-small via Vercel AI Gateway
 5. **Storage**: Store embeddings in Upstash Vector (hosted vector database)
-6. **Retrieval**: Find relevant chunks using similarity search
-7. **Generation**: Generate answer using Vercel AI SDK with retrieved context
+6. **Retrieval**: Find top-k relevant chunks using similarity search
+7. **Corrective Layer (CRAG)**: Judge each chunk's relevance and self-correct retrieval (see below)
+8. **Generation**: Generate answer using Vercel AI SDK with the corrected context
+
+## Corrective RAG (CRAG)
+
+Vanilla RAG silently hands the LLM whatever the vector store returned — even if those chunks are off-topic or only tangentially related. CRAG adds a lightweight evaluation-and-correction step between retrieval and generation so the model only ever sees high-signal context.
+
+### Pipeline Stages
+
+Implemented in [`src/lib/corrective-rag.ts`](src/lib/corrective-rag.ts):
+
+1. **Retrieve** — `similaritySearch` returns the top-5 chunks from Upstash Vector.
+2. **Evaluate (LLM-as-Judge)** — `evaluateDocumentsBatch` sends all chunks to a small judge model (`meta-llama/llama-3.1-8b-instruct` via OpenRouter) in a single batched call. Each chunk is labeled:
+   - **HIGH** (0.7–1.0) — directly answers the question
+   - **AMBIGUOUS** (0.3–0.7) — partially relevant
+   - **LOW** (0.0–0.3) — not relevant
+3. **Triage & Correct** — based on the label distribution, one of four actions is taken:
+   | Situation | Action | `correctionType` |
+   |-----------|--------|------------------|
+   | At least one HIGH chunk | Use HIGH chunks directly | `none` or `filtered` |
+   | AMBIGUOUS chunks present | Run **knowledge refinement** — judge extracts only the relevant strips, preserving exact wording | `knowledge_refined` |
+   | All chunks LOW | **Reformulate the query** into a more specific, document-searchable form and re-retrieve | `query_reformulated` |
+   | Reformulation still fails | Refuse to answer rather than hallucinate | `insufficient_context` |
+4. **Generate** — only the corrected context is passed to the answer-generation LLM.
+
+### Why this matters
+
+- **Fewer hallucinations** — LOW chunks never make it to the generator.
+- **Higher precision** — knowledge refinement trims AMBIGUOUS chunks down to just the relevant sentences, cutting noise tokens.
+- **Self-healing retrieval** — when the user's phrasing doesn't match the document, query reformulation gets a second shot before giving up.
+- **Honest failure** — `insufficient_context` returns a "no answer" response instead of a confident guess.
+- **Observable** — every response carries a `correctionStats` payload (counts, action taken, evaluation time, reformulated query) so the UI can show *what the system did to your retrieval*.
+
+### Correction Stats Shape
+
+```ts
+interface CorrectionStats {
+  totalEvaluated: number;
+  highCount: number;
+  ambiguousCount: number;
+  lowCount: number;
+  correctionApplied: boolean;
+  correctionType: 'none' | 'filtered' | 'knowledge_refined' | 'query_reformulated' | 'insufficient_context';
+  queryReformulated?: string;
+  evaluationTimeMs: number;
+}
+```
 
 ## Tech Stack
 
@@ -35,9 +95,8 @@ Document Upload → Text Extraction → Chunking → Embedding → Vector Storag
 | **PDF Parsing** | unpdf |
 | **Embeddings** | OpenAI text-embedding-3-small via Vercel AI Gateway |
 | **Vector Store** | Upstash Vector (hosted) |
-| **LLM Provider** | Vercel AI Gateway |
-| **LLM SDK** | Vercel AI SDK |
-| **LLM Model** | openai/gpt-5.3-chat |
+| **Answer LLM** | Vercel AI Gateway (openai/gpt-5.3-chat) via Vercel AI SDK |
+| **CRAG Judge LLM** | meta-llama/llama-3.1-8b-instruct via OpenRouter |
 
 ## Chunking Strategy
 
@@ -92,15 +151,18 @@ npm run dev
 Create a `.env.local` file:
 
 ```env
-# Vercel AI Gateway (for embeddings and LLM)
+# Vercel AI Gateway (embeddings + answer-generation LLM)
 AI_GATEWAY_API_KEY=your_api_key_here
 
 # Upstash Vector (hosted vector database)
 UPSTASH_VECTOR_REST_URL=your_upstash_vector_url
 UPSTASH_VECTOR_REST_TOKEN=your_upstash_vector_token
+
+# OpenRouter (CRAG judge model — relevance evaluation, knowledge refinement, query reformulation)
+OPENROUTER_API_KEY=your_openrouter_api_key
 ```
 
-Set up a Vercel AI Gateway at [vercel.com/dashboard](https://vercel.com/dashboard) to proxy OpenAI requests.
+Set up a Vercel AI Gateway at [vercel.com/dashboard](https://vercel.com/dashboard) to proxy OpenAI requests, and grab an OpenRouter key at [openrouter.ai/keys](https://openrouter.ai/keys) for the CRAG judge.
 
 ## Usage
 
@@ -140,9 +202,20 @@ Ask a question about the uploaded document.
 ```json
 {
   "answer": "Based on the document, the main topic is...",
-  "sources": 4
+  "sources": 4,
+  "correctionStats": {
+    "totalEvaluated": 5,
+    "highCount": 2,
+    "ambiguousCount": 2,
+    "lowCount": 1,
+    "correctionApplied": true,
+    "correctionType": "knowledge_refined",
+    "evaluationTimeMs": 842
+  }
 }
 ```
+
+When retrieval completely misses, the response also includes `correctionStats.queryReformulated` with the LLM's rewritten query, and `correctionType` will be `query_reformulated` or `insufficient_context`.
 
 ## Project Structure
 
@@ -161,6 +234,7 @@ rag-app/
 │   │   ├── chunking.ts            # Document parsing & chunking
 │   │   ├── embeddings.ts          # OpenAI embedding via Vercel AI Gateway
 │   │   ├── vectorStore.ts         # Upstash Vector (hosted)
+│   │   ├── corrective-rag.ts      # CRAG: judge, refine, reformulate
 │   │   └── groq.ts                # LLM generation (Vercel AI SDK)
 │   └── types/
 │       └── index.ts               # TypeScript interfaces
@@ -179,3 +253,6 @@ rag-app/
 - [ ] Conversation history
 - [ ] Citation highlighting
 - [ ] Dark mode support
+- [ ] Web-search fallback when CRAG returns `insufficient_context`
+- [ ] Cache judge evaluations per (chunk, question) pair to cut latency
+- [ ] Tunable HIGH/AMBIGUOUS/LOW thresholds via env vars
