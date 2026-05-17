@@ -26,7 +26,19 @@ export interface SearchResult {
   };
 }
 
+export interface CorrectionStats {
+  totalEvaluated: number;
+  highCount: number;
+  ambiguousCount: number;
+  lowCount: number;
+  correctionApplied: boolean;
+  correctionType: 'none' | 'filtered' | 'knowledge_refined' | 'query_reformulated' | 'insufficient_context';
+  queryReformulated?: string;
+  evaluationTimeMs: number;
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  correctionStats?: CorrectionStats;
 }
